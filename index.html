@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UDS Weekly Operations Dashboard</title>
+<script src="data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Variables ─────────────────────────── */
+*,::before,::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--sidebar:#161b27;--card:#1e2435;--border:#2a3050;
+  --accent:#3d7eff;--accent2:#6c63ff;--text:#e2e8f0;--muted:#8892b0;
+  --good:#2dd4bf;--bad:#f87171;--warn:#fbbf24;
+  --font:'Inter',system-ui,sans-serif;
+  --sidebar-w:220px;--topbar-h:56px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
+
+/* ── Layout ─────────────────────────────────────── */
+.layout{display:flex;height:100%}
+aside.sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);
+  background:var(--sidebar);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;position:fixed;
+  top:0;left:0;bottom:0;z-index:100;
+}
+main.content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100%}
+
+/* ── Sidebar ─────────────────────────────────────── */
+.brand{
+  padding:20px 16px 14px;border-bottom:1px solid var(--border);
+  font-weight:700;font-size:15px;letter-spacing:.5px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.brand small{display:block;font-size:10px;font-weight:400;color:var(--muted);-webkit-text-fill-color:var(--muted);margin-top:2px}
+nav{flex:1;padding:8px 0}
+nav a{
+  display:flex;align-items:center;gap:10px;padding:9px 16px;
+  text-decoration:none;color:var(--muted);font-size:13px;
+  border-left:3px solid transparent;transition:all .15s;
+}
+nav a:hover{color:var(--text);background:rgba(255,255,255,.04)}
+nav a.active{color:var(--accent);border-left-color:var(--accent);background:rgba(61,126,255,.08);font-weight:600}
+.nav-icon{
+  width:28px;height:28px;border-radius:6px;background:var(--card);
+  display:grid;place-items:center;font-size:10px;font-weight:700;
+  color:var(--accent);flex-shrink:0;
+}
+
+/* ── Top bar ─────────────────────────────────────── */
+.topbar{
+  position:sticky;top:0;z-index:50;height:var(--topbar-h);
+  background:var(--sidebar);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;gap:16px;
+}
+.topbar-title{font-weight:600;font-size:15px}
+.topbar-actions{display:flex;gap:8px}
+.btn{
+  padding:6px 14px;border-radius:6px;border:1px solid var(--border);
+  background:var(--card);color:var(--muted);cursor:pointer;font-size:12px;
+  transition:all .15s;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.meta-badge{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* ── Section ─────────────────────────────────────── */
+section.sheet{display:none;padding:24px;flex-direction:column;gap:20px}
+section.sheet.active{display:flex}
+
+/* ── Narrative callout ───────────────────────────── */
+.narrative{
+  background:rgba(61,126,255,.07);border-left:3px solid var(--accent);
+  border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;
+  color:var(--muted);line-height:1.6;
+}
+
+/* ── KPI grid ────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi-card{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.3);
+}
+.kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi-value{font-size:26px;font-weight:700;line-height:1.1}
+.kpi-sub{font-size:11px;margin-top:2px;color:var(--muted)}
+.kpi-text{font-size:10px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.delta{font-size:12px;font-weight:600;margin-left:6px;vertical-align:middle}
+.delta.good{color:var(--good)} .delta.bad{color:var(--bad)}
+
+/* ── Chart grid ──────────────────────────────────── */
+.chart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:800px){.chart-grid{grid-template-columns:1fr}}
+.chart-card{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+.chart-title{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;letter-spacing:.3px}
+.chart-wrap{position:relative;height:240px}
+
+/* ── Table ───────────────────────────────────────── */
+.tbl-card{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  overflow:auto;box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+.tbl-title{
+  padding:12px 16px;font-size:12px;font-weight:600;color:var(--muted);
+  border-bottom:1px solid var(--border);letter-spacing:.3px;
+}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{
+  padding:8px 12px;text-align:right;font-weight:600;color:var(--muted);
+  background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);white-space:nowrap;
+}
+th:first-child{text-align:left}
+td{
+  padding:7px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);
+  white-space:nowrap;
+}
+td:first-child{text-align:left;color:var(--text)}
+tr:last-child td{border-bottom:none}
+.tbl-gt td{font-weight:700;color:var(--accent);background:rgba(61,126,255,.06)}
+tr:hover td{background:rgba(255,255,255,.03)}
+
+/* ── Print ───────────────────────────────────────── */
+@media print{
+  aside.sidebar{display:none}
+  main.content{margin-left:0}
+  section.sheet{display:flex!important}
+  .topbar-actions{display:none}
+  .chart-wrap{height:200px}
+  body{background:#fff;color:#000}
+  .kpi-card,.chart-card,.tbl-card{background:#f9f9f9;border:1px solid #ccc}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="brand">
+    UDS Dashboard
+    <small id="meta-source">Loading…</small>
+  </div>
+  <nav id="nav"></nav>
+</aside>
+
+<!-- ── Main ── -->
+<main class="content">
+  <div class="topbar">
+    <span class="topbar-title" id="active-title">Loading…</span>
+    <div style="display:flex;align-items:center;gap:16px">
+      <span class="meta-badge" id="meta-gen"></span>
+      <div class="topbar-actions">
+        <button class="btn" onclick="window.print()">Print</button>
+        <button class="btn" onclick="exportAll()">Export JSON</button>
+      </div>
+    </div>
+  </div>
+  <div id="sheets-container"></div>
+</main>
+
+</div>
+
+<script>
+/* ── Formatters ─────────────────────────────────────── */
+const FMT = {
+  pct2: v => v == null ? '—' : (v * 100).toFixed(2) + '%',
+  pct1: v => v == null ? '—' : (v * 100).toFixed(1) + '%',
+  num2: v => v == null ? '—' : v.toFixed(2),
+  int:  v => v == null ? '—' : Math.round(v).toLocaleString('en-IN'),
+  t:    v => v == null ? '' : String(v),
+  pp:   v => v == null ? '—' : (v * 100).toFixed(2) + ' pp',
+};
+function fmt(v, f, suffix) {
+  let s = (FMT[f] || FMT.num2)(v);
+  if (suffix && v != null) s += ' ' + suffix;
+  return s;
+}
+
+/* Axis tick formatters (must NOT return undefined) */
+function tickFmt(f) {
+  return {
+    pct2: v => (v*100).toFixed(1)+'%',
+    pct1: v => (v*100).toFixed(1)+'%',
+    num2: v => v.toFixed(1),
+    int:  v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : Math.round(v),
+    pp:   v => (v*100).toFixed(1)+' pp',
+    t:    v => v,
+  }[f] || (v => v);
+}
+function tooltipFmt(f, suffix) {
+  return (context) => {
+    const v = context.parsed.y ?? context.parsed.x ?? context.raw;
+    return ' ' + fmt(v, f, suffix);
+  };
+}
+
+/* ── Palette ─────────────────────────────────────────── */
+const PAL = [
+  '#3d7eff','#6c63ff','#2dd4bf','#f87171','#fbbf24',
+  '#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9',
+  '#4ade80','#f472b6','#22d3ee','#facc15','#94a3b8',
+];
+
+/* ── Chart.js defaults ───────────────────────────────── */
+Chart.defaults.color = '#8892b0';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
+Chart.defaults.font.family = 'Inter,system-ui,sans-serif';
+
+/* Lazy chart registry */
+const chartRegistry = {};
+
+function buildChart(canvasId, spec) {
+  if (chartRegistry[canvasId]) { chartRegistry[canvasId].destroy(); }
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const isH  = spec.horizontal;
+  const isDon = spec.type === 'doughnut';
+  const isLine = spec.type === 'line';
+
+  /* Datasets */
+  const datasets = spec.datasets.map((ds, i) => {
+    const color = PAL[i % PAL.length];
+    const base = {
+      label: ds.label,
+      data:  ds.data,
+    };
+    if (isLine) {
+      return { ...base, borderColor: color, backgroundColor: color+'22',
+               tension:.3, fill:false, pointRadius:3, pointHoverRadius:5,
+               borderWidth:2 };
+    }
+    if (isDon) {
+      return { ...base,
+               backgroundColor: ds.data.map((_,j) => PAL[j % PAL.length]),
+               borderColor: '#1e2435', borderWidth:2 };
+    }
+    return { ...base, backgroundColor: color+'cc', borderColor: color,
+             borderWidth:1, borderRadius:3 };
+  });
+
+  /* Scales */
+  const valueAxis = {
+    ticks: { callback: tickFmt(spec.fmt), maxTicksLimit:7 },
+    grid:  { color:'rgba(255,255,255,0.06)' },
+  };
+  const categoryAxis = {
+    ticks: { autoSkip: false },
+  };
+  let scales = {};
+  if (!isDon) {
+    if (isH) {
+      scales = { x: valueAxis, y: categoryAxis };
+    } else {
+      scales = { x: categoryAxis, y: valueAxis };
+    }
+  }
+
+  const tooltipCallbacks = {
+    label: tooltipFmt(spec.fmt),
+  };
+
+  const config = {
+    type: isDon ? 'doughnut' : isH ? 'bar' : (isLine ? 'line' : 'bar'),
+    data: { labels: spec.labels, datasets },
+    options: {
+      indexAxis: isH ? 'y' : 'x',
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: {
+          display: isDon || datasets.length > 1,
+          position: isDon ? 'right' : 'bottom',
+          labels: { boxWidth:12, padding:10, font:{ size:11 } },
+        },
+        tooltip: { callbacks: tooltipCallbacks },
+      },
+      scales,
+    },
+  };
+
+  chartRegistry[canvasId] = new Chart(ctx, config);
+}
+
+/* ── KPI card ─────────────────────────────────────── */
+function renderKPI(k) {
+  const valStr = fmt(k.value, k.fmt, k.suffix);
+  let deltaHtml = '';
+  if (k.delta != null) {
+    const good = k.goodlow ? k.delta < 0 : k.delta > 0;
+    const cls  = good ? 'good' : 'bad';
+    const arrow = k.delta > 0 ? '▲' : '▼';
+    const dv   = fmt(Math.abs(k.delta), k.deltafmt || 'pp');
+    deltaHtml = `<span class="delta ${cls}">${arrow} ${dv}</span>`;
+  }
+  const textHtml = k.text ? `<div class="kpi-text" title="${k.text}">${k.text}</div>` : '';
+  return `
+  <div class="kpi-card">
+    <div class="kpi-label">${k.label}</div>
+    <div class="kpi-value">${valStr}${deltaHtml}</div>
+    ${textHtml}
+  </div>`;
+}
+
+/* ── Table ─────────────────────────────────────────── */
+function renderTable(t) {
+  const isGT = v => typeof v === 'string' && v.toLowerCase().includes('grand total');
+  const hdrs = t.headers.map((h,i) =>
+    `<th${i===0?' style="min-width:140px"':''}>${h}</th>`).join('');
+  const rows = t.rows.map(row => {
+    const gt = isGT(row[0]);
+    const cells = row.map((v,i) =>
+      `<td>${fmt(v, t.fmt[i] || 't')}</td>`).join('');
+    return `<tr class="${gt ? 'tbl-gt' : ''}">${cells}</tr>`;
+  }).join('');
+  return `
+  <div class="tbl-card">
+    <div class="tbl-title">${t.title}</div>
+    <table><thead><tr>${hdrs}</tr></thead><tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+/* ── Section build ─────────────────────────────────── */
+const renderedSections = new Set();
+
+function renderSection(s) {
+  if (renderedSections.has(s.id)) return;
+  renderedSections.add(s.id);
+
+  const kpiHtml = s.kpis.map(renderKPI).join('');
+
+  const chartPairs = [];
+  for (let i = 0; i < s.charts.length; i += 2) {
+    const pair = s.charts.slice(i, i+2);
+    chartPairs.push(pair);
+  }
+  let chartHtml = '';
+  chartPairs.forEach(pair => {
+    const cards = pair.map((c, ci) => {
+      const cid = `chart_${s.id}_${s.charts.indexOf(c)}`;
+      return `
+      <div class="chart-card">
+        <div class="chart-title">${c.title}</div>
+        <div class="chart-wrap"><canvas id="${cid}"></canvas></div>
+      </div>`;
+    }).join('');
+    chartHtml += `<div class="chart-grid">${cards}</div>`;
+  });
+
+  const tableHtml = (s.tables || []).map(renderTable).join('');
+
+  const el = document.getElementById(`section-${s.id}`);
+  if (!el) return;
+  el.innerHTML = `
+    <div class="narrative">${s.narrative || ''}</div>
+    <div class="kpi-grid">${kpiHtml}</div>
+    ${chartHtml}
+    ${tableHtml}
+  `;
+
+  /* Build charts after DOM insertion */
+  s.charts.forEach((c, ci) => {
+    const cid = `chart_${s.id}_${ci}`;
+    buildChart(cid, c);
+  });
+}
+
+/* ── Navigation ──────────────────────────────────────── */
+function showSection(id) {
+  document.querySelectorAll('section.sheet').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+
+  const section = document.getElementById(`section-${id}`);
+  const navLink  = document.querySelector(`nav a[data-id="${id}"]`);
+  if (section) {
+    section.classList.add('active');
+    const sh = window.DASHBOARD.sheets.find(s => s.id === id);
+    renderSection(sh);
+    document.getElementById('active-title').textContent =
+      (sh?.name || id) + (sh?.subtitle ? ' — ' + sh.subtitle : '');
+  }
+  if (navLink) navLink.classList.add('active');
+  location.hash = id;
+}
+
+/* ── Export ─────────────────────────────────────────── */
+function exportAll() {
+  const blob = new Blob([JSON.stringify(window.DASHBOARD, null, 2)],
+                        {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'UDS_Dashboard_data.json';
+  a.click();
+}
+
+/* ── Init ───────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  const D = window.DASHBOARD;
+  if (!D) {
+    document.body.innerHTML = '<p style="color:red;padding:40px">data.js not loaded. Open via a local web server.</p>';
+    return;
+  }
+
+  /* Meta */
+  document.getElementById('meta-source').textContent = D.meta?.source || '';
+  document.getElementById('meta-gen').textContent = 'Generated: ' + (D.meta?.generated || '');
+  document.title = D.meta?.title || 'UDS Dashboard';
+
+  /* Nav + sections */
+  const nav = document.getElementById('nav');
+  const container = document.getElementById('sheets-container');
+
+  D.sheets.forEach(s => {
+    /* Nav item */
+    const a = document.createElement('a');
+    a.href = '#' + s.id;
+    a.dataset.id = s.id;
+    a.innerHTML = `<span class="nav-icon">${s.icon || s.id.slice(0,2).toUpperCase()}</span>${s.name}`;
+    a.addEventListener('click', e => { e.preventDefault(); showSection(s.id); });
+    nav.appendChild(a);
+
+    /* Empty section placeholder */
+    const sec = document.createElement('section');
+    sec.className = 'sheet';
+    sec.id = `section-${s.id}`;
+    container.appendChild(sec);
+  });
+
+  /* Show initial section */
+  const startId = location.hash.slice(1) || D.sheets[0]?.id;
+  showSection(startId);
+});
+</script>
+</body>
+</html>

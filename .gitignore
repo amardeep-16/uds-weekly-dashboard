@@ -1,0 +1,16 @@
+# Source workbook — too large / confidential for version control
+UDS_PPT_Data_Wk_*.xlsx
+UDS_PPT DUMP_Wk_*.xlsx
+~$*.xlsx
+
+# Generated outputs (rebuilt by run_all.py)
+data.js
+UDS_Dashboard.xlsx
+
+# Dev helper
+check.py
+
+# Python
+__pycache__/
+*.pyc
+.env
